@@ -24,3 +24,11 @@ class ReflectResponse(BaseModel):
     reflection: str
     clarifying_question: str
     path_hypotheses: List[PathHypothesis]
+
+class EvalResult(BaseModel):
+    faithfulness: int          # 1–5
+    non_prescriptive: int      # 1–5
+    clarity: int               # 1–5
+    actionability: int         # 1–5
+    issues: List[str]
+    overall_assessment: str

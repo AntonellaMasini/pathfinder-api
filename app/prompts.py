@@ -41,3 +41,28 @@ Return ONLY valid JSON with this exact schema:
   ]
 }
 """
+
+EVAL_PROMPT = """
+You are evaluating an AI-generated career reflection tool.
+
+Rate the output using the rubric below.
+Be strict but fair.
+
+Rubric (1–5):
+- Faithfulness: Does the reflection accurately reflect the user's text?
+- Non-prescriptive: Does it avoid telling the user what they "should" do?
+- Clarity: Is the reflection easy to understand and well structured?
+- Actionability: Are micro-experiments concrete and realistic (<= 7 days)?
+
+List any issues clearly.
+
+Return ONLY valid JSON with this schema:
+{
+  "faithfulness": number,
+  "non_prescriptive": number,
+  "clarity": number,
+  "actionability": number,
+  "issues": [string],
+  "overall_assessment": string
+}
+"""
