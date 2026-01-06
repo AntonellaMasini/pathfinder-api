@@ -3,10 +3,10 @@ from fastapi import FastAPI, HTTPException
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from .schemas import ReflectRequest, ReflectResponse, Insights, PathHypothesis
-from .prompts import EXTRACT_PROMPT, SYNTHESIZE_PROMPT
+from .schemas import ReflectRequest, ReflectResponse, Insights, PathHypothesis, EvalResult
+from .prompts import EXTRACT_PROMPT, SYNTHESIZE_PROMPT, EVAL_PROMPT
 
-load_dotenv()  # loads .env if present
+load_dotenv()  # loads .env
 
 app = FastAPI(title="Pathfinder API", version="0.1.0")
 client = OpenAI()  # reads OPENAI_API_KEY from env
@@ -60,3 +60,22 @@ def reflect(req: ReflectRequest):
         clarifying_question=synth_dict.get("clarifying_question", ""),
         path_hypotheses=paths,
     )
+
+@app.post("/evaluate", response_model=EvalResult)
+def evaluate(payload: dict):
+    """
+    payload should include:
+    - user_text
+    - reflection
+    - path_hypotheses
+    """
+    eval = client.responses.create(
+        model=MODEL,
+        input=[
+            {"role": "system", "content": EVAL_PROMPT},
+            {"role": "user", "content": json.dumps(payload)}
+        ],
+    )
+
+    eval_dict = _safe_json(eval.output_text)
+    return EvalResult(**eval_dict)
