@@ -1,0 +1,166 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Pathfinder - Playful, nostalgic palette */
+    --background: 45 100% 97%; /* Creamy paper */
+    --foreground: 220 30% 20%; /* Soft navy */
+
+    --card: 45 80% 95%;
+    --card-foreground: 220 30% 20%;
+
+    --popover: 45 100% 97%;
+    --popover-foreground: 220 30% 20%;
+
+    /* Sunny yellow - primary energy */
+    --primary: 45 95% 58%;
+    --primary-foreground: 220 30% 15%;
+
+    /* Coral pink - warmth */
+    --secondary: 350 85% 70%;
+    --secondary-foreground: 350 50% 20%;
+
+    /* Sky blue - exploration */
+    --accent: 200 85% 65%;
+    --accent-foreground: 200 50% 15%;
+
+    /* Mint green - freshness */
+    --mint: 160 60% 65%;
+    --mint-foreground: 160 40% 15%;
+
+    --muted: 45 30% 90%;
+    --muted-foreground: 220 15% 45%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 45 40% 85%;
+    --input: 45 40% 85%;
+    --ring: 45 95% 58%;
+
+    --radius: 1rem;
+
+    /* Custom gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(45 100% 97%) 0%, hsl(350 85% 95%) 50%, hsl(200 85% 95%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(45 80% 95%) 0%, hsl(45 100% 97%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(45 95% 58%) 0%, hsl(350 85% 70%) 100%);
+
+    /* Shadows */
+    --shadow-playful: 4px 4px 0px hsl(220 30% 20% / 0.15);
+    --shadow-hover: 6px 6px 0px hsl(220 30% 20% / 0.2);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 220 30% 12%;
+    --foreground: 45 100% 97%;
+    --card: 220 30% 15%;
+    --card-foreground: 45 100% 97%;
+    --popover: 220 30% 12%;
+    --popover-foreground: 45 100% 97%;
+    --primary: 45 95% 58%;
+    --primary-foreground: 220 30% 15%;
+    --secondary: 350 85% 70%;
+    --secondary-foreground: 350 50% 20%;
+    --accent: 200 85% 65%;
+    --accent-foreground: 200 50% 15%;
+    --mint: 160 60% 65%;
+    --mint-foreground: 160 40% 15%;
+    --muted: 220 30% 20%;
+    --muted-foreground: 45 30% 70%;
+    --border: 220 30% 25%;
+    --input: 220 30% 25%;
+    --ring: 45 95% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body;
+    background: var(--gradient-hero);
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .shadow-playful {
+    box-shadow: var(--shadow-playful);
+  }
+
+  .shadow-playful-hover {
+    box-shadow: var(--shadow-hover);
+  }
+
+  .gradient-text {
+    background: var(--gradient-accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .wobble {
+    animation: wobble 3s ease-in-out infinite;
+  }
+
+  .float {
+    animation: float 4s ease-in-out infinite;
+  }
+
+  .spin-slow {
+    animation: spin 8s linear infinite;
+  }
+
+  .bounce-gentle {
+    animation: bounce-gentle 2s ease-in-out infinite;
+  }
+
+  /* Hide scrollbar but keep scrolling */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes bounce-gentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes squiggle {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(2px); }
+  75% { transform: translateX(-2px); }
+}

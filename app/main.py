@@ -1,8 +1,11 @@
 import os, json
+
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from openai import OpenAI
 from typing import Optional
+from elevenlabs.client import ElevenLabs
 
 from .schemas import ReflectRequest, ReflectResponse, Insights, PathHypothesis, EvalResult
 from .prompts import EXTRACT_PROMPT, SYNTHESIZE_PROMPT, EVAL_PROMPT, REPAIR_PROMPT
@@ -17,6 +20,12 @@ PRETTY_JSON = os.getenv("PRETTY_JSON", "false").lower() == "true"
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "1"))
 RETRY_MIN_SCORE = int(os.getenv("RETRY_MIN_SCORE", "3"))
 
+elevenlabs = ElevenLabs(
+  api_key=os.getenv("ELEVENLABS_API_KEY"),
+)
+
+ELEVEN_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+ELEVEN_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_flash_v2_5")
 
 def json_response(data: dict):
     if PRETTY_JSON:
@@ -206,3 +215,37 @@ def reflect_guarded(req: ReflectRequest):
         "eval": EvalResult(**{k: v for k, v in eval1.items() if not k.startswith("_")}).model_dump(),
         "retries_used": retries_used,
     }
+
+
+@app.post("/tts")
+def tts(payload: dict):
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing 'text'")
+
+    if not os.getenv("ELEVENLABS_API_KEY") or not ELEVEN_VOICE_ID:
+        raise HTTPException(status_code=500, detail="ElevenLabs env vars not set")
+
+    if len(text) > 1200:
+        text = text[:1200] + "..."
+
+    try:
+        # Collect all audio chunks first, then return as single response
+        audio_stream = elevenlabs.text_to_speech.convert(
+            text=text,
+            voice_id=ELEVEN_VOICE_ID,
+            model_id=ELEVEN_MODEL_ID,
+            output_format="mp3_44100_128",
+        )
+        # convert() returns a generator - collect all bytes
+        chunks = []
+        for chunk in audio_stream:
+            if chunk:
+                chunks.append(chunk)
+        audio_bytes = b"".join(chunks)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=502, detail=f"ElevenLabs TTS failed: {repr(e)}")
+
+    return Response(content=audio_bytes, media_type="audio/mpeg")
