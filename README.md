@@ -14,3 +14,6 @@ The current MVP allows a user to describe their work experiences and motivations
 - suggests concrete, short-term micro-experiments to test each path in the real world
 
 The MVP is intentionally text-first, prioritizing reasoning quality, clarity, and evaluation over interface complexity.
+
+
+http://127.0.0.1:8000/docs

@@ -1,10 +1,11 @@
 import os, json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from dotenv import load_dotenv
 from openai import OpenAI
+from typing import Optional
 
 from .schemas import ReflectRequest, ReflectResponse, Insights, PathHypothesis, EvalResult
-from .prompts import EXTRACT_PROMPT, SYNTHESIZE_PROMPT, EVAL_PROMPT
+from .prompts import EXTRACT_PROMPT, SYNTHESIZE_PROMPT, EVAL_PROMPT, REPAIR_PROMPT
 
 load_dotenv()  # loads .env
 
@@ -12,6 +13,15 @@ app = FastAPI(title="Pathfinder API", version="0.1.0")
 client = OpenAI()  # reads OPENAI_API_KEY from env
 
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+PRETTY_JSON = os.getenv("PRETTY_JSON", "false").lower() == "true"
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "1"))
+RETRY_MIN_SCORE = int(os.getenv("RETRY_MIN_SCORE", "3"))
+
+
+def json_response(data: dict):
+    if PRETTY_JSON:
+        return Response(content=json.dumps(data, indent=2), media_type="application/json")
+    return data  # FastAPI will serialize compactly
 
 def _safe_json(s: str) -> dict:
     try:
@@ -54,20 +64,23 @@ def reflect(req: ReflectRequest):
     insights = Insights(**insights_dict)
     paths = [PathHypothesis(**p) for p in synth_dict.get("path_hypotheses", [])]
 
-    return ReflectResponse(
+    validated = ReflectResponse(
         insights=insights,
         reflection=synth_dict.get("reflection", ""),
         clarifying_question=synth_dict.get("clarifying_question", ""),
         path_hypotheses=paths,
     )
+    return json_response(validated.model_dump())
 
 @app.post("/evaluate", response_model=EvalResult)
 def evaluate(payload: dict):
     """
     payload should include:
-    - user_text
-    - reflection
-    - path_hypotheses
+    - user_text (string)
+    - reflection (string)
+    - clarifying_question (string, optional)
+    - path_hypotheses (list, optional)
+    - insights (object, optional)
     """
     eval = client.responses.create(
         model=MODEL,
@@ -78,4 +91,118 @@ def evaluate(payload: dict):
     )
 
     eval_dict = _safe_json(eval.output_text)
-    return EvalResult(**eval_dict)
+
+    # Extra hardening: enforce pass_gate rules server-side too. If not, the evaluator itself would just be an LLM. 
+    # Should not fully trust the model, even when it’s evaluating.
+    scores = [
+        eval_dict.get("faithfulness", 0),
+        eval_dict.get("non_prescriptive", 0),
+        eval_dict.get("clarity", 0),
+        eval_dict.get("actionability", 0),
+        eval_dict.get("overreach", 0),
+        eval_dict.get("advice_risk", 0),
+    ]
+
+    issues = eval_dict.get("issues", []) or []
+    eval_dict["pass_gate"] = (min(scores) >= 4) and (len(issues) == 0)
+
+    validated = EvalResult(**eval_dict)
+    return json_response(validated.model_dump())
+
+
+@app.post("/reflect_guarded")
+def reflect_guarded(req: ReflectRequest):
+    user_text = req.text.strip()
+
+    # 1) Extract insights (do once)
+    extract = client.responses.create(
+        model=MODEL,
+        input=[
+            {"role": "system", "content": EXTRACT_PROMPT},
+            {"role": "user", "content": user_text},
+        ],
+    )
+    insights_dict = _safe_json(extract.output_text)
+
+    # helper: synth step
+    def run_synth(system_prompt: str, extra: Optional[dict] = None):
+        payload = {"user_text": user_text, "insights": insights_dict}
+        if extra:
+            payload.update(extra)
+        resp = client.responses.create(
+            model=MODEL,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(payload)},
+            ],
+        )
+        return _safe_json(resp.output_text)
+
+    # helper: eval step
+    def run_eval(reflect_obj: dict):
+        eval_payload = {
+            "user_text": user_text,
+            "insights": insights_dict,
+            "reflection": reflect_obj.get("reflection", ""),
+            "clarifying_question": reflect_obj.get("clarifying_question", ""),
+            "path_hypotheses": reflect_obj.get("path_hypotheses", []),
+        }
+        resp = client.responses.create(
+            model=MODEL,
+            input=[
+                {"role": "system", "content": EVAL_PROMPT},
+                {"role": "user", "content": json.dumps(eval_payload)},
+            ],
+        )
+        eval_dict = _safe_json(resp.output_text)
+
+        # enforce pass_gate server-side
+        scores = [
+            eval_dict.get("faithfulness", 0),
+            eval_dict.get("non_prescriptive", 0),
+            eval_dict.get("clarity", 0),
+            eval_dict.get("actionability", 0),
+            eval_dict.get("overreach", 0),
+            eval_dict.get("advice_risk", 0),
+        ]
+        issues = eval_dict.get("issues", []) or []
+        eval_dict["pass_gate"] = (min(scores) >= 4) and (len(issues) == 0)
+        eval_dict["_min_score"] = min(scores)
+        return eval_dict
+
+    # 2) First synth
+    synth_obj = run_synth(SYNTHESIZE_PROMPT)
+    eval1 = run_eval(synth_obj)
+
+    retries_used = 0
+
+    # 3) Optional single retry if fail
+    while (not eval1["pass_gate"]) and retries_used < MAX_RETRIES:
+        if eval1.get("_min_score", 0) >= RETRY_MIN_SCORE:
+            break  # don't retry if it's "almost fine" (save tokens)
+
+        synth_obj = run_synth(
+            REPAIR_PROMPT,
+            extra={
+                "issues": eval1.get("issues", []),
+                "issue_evidence": eval1.get("issue_evidence", []),
+            },
+        )
+        eval1 = run_eval(synth_obj)
+        retries_used += 1
+
+    # 4) Validate + return (include eval)
+    insights = Insights(**insights_dict)
+    paths = [PathHypothesis(**p) for p in synth_obj.get("path_hypotheses", [])]
+    reflect_response = ReflectResponse(
+        insights=insights,
+        reflection=synth_obj.get("reflection", ""),
+        clarifying_question=synth_obj.get("clarifying_question", ""),
+        path_hypotheses=paths,
+    )
+
+    return {
+        "result": reflect_response.model_dump(),
+        "eval": EvalResult(**{k: v for k, v in eval1.items() if not k.startswith("_")}).model_dump(),
+        "retries_used": retries_used,
+    }
