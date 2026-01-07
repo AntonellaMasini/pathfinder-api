@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { StarDoodle, PathDoodle, QuestionDoodle, SparklesDoodle } from "./Doodles";
 
@@ -48,12 +49,17 @@ const HeroSection = () => {
           className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-up"
           style={{ animationDelay: "0.3s" }}
         >
-          <Button variant="hero" size="lg">
-            <PathDoodle className="w-5 h-5 mr-1" />
-            Reflect on my path
+          <Button variant="hero" size="lg" className="min-w-[220px]" asChild>
+            <Link to="/write">
+              <PathDoodle className="w-5 h-5 mr-1" />
+              Write about my path
+            </Link>
           </Button>
-          <Button variant="outline" size="lg">
-            Try the demo
+          <Button variant="hero" size="lg" className="min-w-[220px]" asChild>
+            <Link to="/talk">
+              <PathDoodle className="w-5 h-5 mr-1" />
+              Talk about my path
+            </Link>
           </Button>
         </div>
 
