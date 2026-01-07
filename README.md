@@ -13,7 +13,7 @@ Instead of matching users to predefined jobs, Pathfinder reflects back their sta
 ## Screenshots
 
 <p align="center">
-  <img src="pics/Screenshot%202026-01-07%20at%2023.00.01.png" alt="Pathfinder Landing" width="700">
+  <img src="pics/Screenshot%202026-01-07%20at%2023.10.22.png" alt="Reflection Results" width="700">
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@ Instead of matching users to predefined jobs, Pathfinder reflects back their sta
 </p>
 
 <p align="center">
-  <img src="pics/Screenshot%202026-01-07%20at%2023.10.22.png" alt="Reflection Results" width="700">
+  <img src="pics/Screenshot%202026-01-07%20at%2023.00.01.png" alt="Pathfinder Landing" width="700">
 </p>
 
 <p align="center">
