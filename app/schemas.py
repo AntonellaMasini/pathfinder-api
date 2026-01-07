@@ -13,11 +13,19 @@ class Insights(BaseModel):
     constraints: List[str] = []
     open_questions: List[str] = []
 
+class EnvironmentFit(BaseModel):
+    likely_to_fit: list[str]
+    may_be_challenging: list[str]
+
 class PathHypothesis(BaseModel):
     name: str
     why_it_fits: str
     risks: List[str] = []
     micro_experiments: List[str] = []
+
+    environment_fit: EnvironmentFit
+    example_roles: list[str]
+    company_archetypes: list[str]
 
 class ReflectResponse(BaseModel):
     insights: Insights
