@@ -10,6 +10,28 @@ Pathfinder is a text- and voice-based career sensemaking tool designed to help p
 
 Instead of matching users to predefined jobs, Pathfinder reflects back their stated energizers, drainers, skills, values, and constraints, and proposes a small set of path hypotheses: archetypal ways of working rather than job titles. The system emphasizes reflection, uncertainty, and experimentation, helping users move from confusion to actionable insight while preserving personal agency.
 
+## Screenshots
+
+<p align="center">
+  <img src="pics/Screenshot%202026-01-07%20at%2023.00.01.png" alt="Pathfinder Landing" width="700">
+</p>
+
+<p align="center">
+  <img src="pics/Screenshot%202026-01-07%20at%2023.00.06.png" alt="Write Mode" width="700">
+</p>
+
+<p align="center">
+  <img src="pics/Screenshot%202026-01-07%20at%2023.10.22.png" alt="Reflection Results" width="700">
+</p>
+
+<p align="center">
+  <img src="pics/Screenshot%202026-01-07%20at%2023.23.59.png" alt="Path Hypotheses" width="700">
+</p>
+
+<p align="center">
+  <img src="pics/Screenshot%202026-01-07%20at%2023.24.03.png" alt="Path Details" width="700">
+</p>
+
 ## MVP
 The current MVP allows a user to describe their work experiences and motivations in free-form text. Using an LLM-based reasoning layer, the system:
 - extracts structured signals (energizers, values, skills, work styles, constraints)
