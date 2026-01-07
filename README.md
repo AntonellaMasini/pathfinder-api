@@ -22,8 +22,47 @@ To reduce overreach, the system includes an internal evaluation layer that check
 
 The MVP is intentionally minimal, prioritizing reasoning quality, clarity, and human-centered design over interface complexity or scale.
 
+## Getting Started
+
+### Prerequisites
+- Python 3.9+
+- Node.js 18+
+- OpenAI API key
+- ElevenLabs API key (optional, for TTS)
+
+### Backend Setup
+
+```bash
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file with your API keys
+cp .env.example .env
+# Edit .env and add:
+#   OPENAI_API_KEY=sk-...
+#   ELEVENLABS_API_KEY=sk_...  (optional)
+#   ELEVENLABS_VOICE_ID=...    (optional)
+
+# Run the API server
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+API docs available at: http://127.0.0.1:8000/docs
+
+### Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend available at: http://localhost:8080
+
 ## Notes
 
 This project is an exploration of how AI systems can support self-understanding and decision-making under uncertainty — not by optimizing outcomes, but by improving sensemaking.
-
-http://127.0.0.1:8000/docs
