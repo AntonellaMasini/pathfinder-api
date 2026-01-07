@@ -25,6 +25,10 @@ export default defineConfig(({ mode }) => ({
         target: "http://localhost:8000",
         changeOrigin: true,
       },
+      "/tts": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

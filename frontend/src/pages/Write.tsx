@@ -16,6 +16,10 @@ const Write = () => {
   const totalCards = hypotheses.length;
   const hasMultipleCards = totalCards > 1;
 
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+
   const goToNext = () => {
     if (!hasMultipleCards || isTransitioning) return;
     setIsTransitioning(true);
@@ -67,10 +71,52 @@ const Write = () => {
   
       const data = await res.json();
       setResult(data);
+      setActiveIndex(0); // optional: reset carousel
+      const reflection = data?.result?.reflection;
+      if (reflection) speakText(reflection);
     } catch (e) {
       setError("Couldn’t reflect right now. Try again in a moment.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const speakText = async (textToSpeak: string) => {
+    if (!textToSpeak?.trim()) return;
+  
+    setTtsLoading(true);
+    try {
+      // stop previous audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      // cleanup old blob url
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
+  
+      const res = await fetch("/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textToSpeak }),
+      });
+  
+      if (!res.ok) throw new Error("TTS failed");
+  
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      audioUrlRef.current = url;
+  
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      await audio.play();
+    } catch (e) {
+      // optional: set an error state if you want
+      console.error(e);
+    } finally {
+      setTtsLoading(false);
     }
   };
   
@@ -120,9 +166,21 @@ const Write = () => {
         {/* Reflection result (appears only after API call) */}
         {result && (
           <div className="bg-card border-2 border-foreground/10 rounded-2xl p-6 shadow-playful mt-6 mb-6 max-w-2xl mx-auto">
-            <h2 className="text-lg font-display font-semibold mb-3">
-              Reflection
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-display font-semibold">Reflection</h2>
+
+              <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const text = result?.result?.reflection;
+                if (text) speakText(text);
+              }}
+              disabled={ttsLoading || !result?.result?.reflection}
+            >
+              {ttsLoading ? "Speaking..." : "🔊 Replay"}
+            </Button>
+            </div>
             <p className="text-base leading-relaxed font-body">
               {result.result.reflection}
             </p>
