@@ -57,7 +57,7 @@ const HeroSection = () => {
           </Button>
           <Button variant="hero" size="lg" className="min-w-[220px]" asChild>
             <Link to="/talk">
-              <PathDoodle className="w-5 h-5 mr-1" />
+              <SparklesDoodle className="w-5 h-5 mr-1" />
               Talk about my path
             </Link>
           </Button>
