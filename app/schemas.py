@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 class ReflectRequest(BaseModel):
     text: str = Field(..., min_length=10, description="User reflection / story")
@@ -25,10 +25,23 @@ class ReflectResponse(BaseModel):
     clarifying_question: str
     path_hypotheses: List[PathHypothesis]
 
+class IssueEvidence(BaseModel):
+    issue: str
+    evidence: Optional[str] = None  # quote or pointer to specific sentence/field
+    suggestion: Optional[str] = None
+
+
 class EvalResult(BaseModel):
-    faithfulness: int          # 1–5
-    non_prescriptive: int      # 1–5
-    clarity: int               # 1–5
-    actionability: int         # 1–5
-    issues: List[str]
+    # 1–5 scales (5 is best)
+    faithfulness: int = Field(..., ge=1, le=5)
+    non_prescriptive: int = Field(..., ge=1, le=5)
+    clarity: int = Field(..., ge=1, le=5)
+    actionability: int = Field(..., ge=1, le=5)
+    overreach: int = Field(..., ge=1, le=5)     # 5 = no unsupported claims
+    advice_risk: int = Field(..., ge=1, le=5)   # 5 = safe, no “therapy/guarantees/should”
+
+    issues: List[str] = []
+    issue_evidence: List[IssueEvidence] = []
     overall_assessment: str
+
+    pass_gate: bool
