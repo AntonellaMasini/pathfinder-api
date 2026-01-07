@@ -5,7 +5,39 @@ import { StarDoodle, SparklesDoodle, PathDoodle, QuestionDoodle } from "@/compon
 
 const Write = () => {
   const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  const handleReflect = async () => {
+    if (text.trim().length < 10) {
+      setError("Write a little more so Pathfinder has something to reflect on.");
+      return;
+    }
+  
+    setLoading(true);
+    setError(null);
+  
+    try {
+      const res = await fetch("/reflect_guarded", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+  
+      if (!res.ok) {
+        throw new Error("Something went wrong.");
+      }
+  
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      setError("Couldn’t reflect right now. Try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 py-12 overflow-hidden">
       {/* Floating decorative elements */}
@@ -49,11 +81,114 @@ const Write = () => {
           />
         </div>
 
+        {/* Reflection result (appears only after API call) */}
+        {result && (
+          <div className="bg-card border-2 border-foreground/10 rounded-2xl p-6 shadow-playful mt-6 mb-6">
+            <h2 className="text-lg font-display font-semibold mb-3">
+              Reflection
+            </h2>
+            <p className="text-base leading-relaxed font-body">
+              {result.result.reflection}
+            </p>
+          </div>
+        )}
+
+        {/* insights result (appears only after API call) */}
+        {result?.result?.insights && (
+          <div className="bg-card border-2 border-foreground/10 rounded-2xl p-6 shadow-playful mt-6 mb-6">
+            <h2 className="text-lg font-display font-semibold mb-4">
+              Insights
+            </h2>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                ["Energizers", result.result.insights.energizers],
+                ["Drainers", result.result.insights.drainers],
+                ["Values", result.result.insights.values],
+                ["Skills", result.result.insights.skills],
+                ["Work styles", result.result.insights.work_styles],
+                ["Open questions", result.result.insights.open_questions],
+              ].map(([label, items]) => (
+                <div
+                  key={label as string}
+                  className="rounded-xl border border-foreground/10 p-4"
+                >
+                  <div className="font-medium mb-2">{label as string}</div>
+                  {items && items.length > 0 ? (
+                    <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+                      {items.map((item: string, i: number) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">—</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* path hypotheses result (appears only after API call) */}
+        {Array.isArray(result?.result?.path_hypotheses) &&
+          result.result.path_hypotheses.length > 0 && (
+            <div className="mt-6 mb-6">
+              <h2 className="text-2xl font-display font-bold mb-4 text-center">
+                Path hypotheses
+              </h2>
+
+              <div className="space-y-4">
+                {result.result.path_hypotheses.map((p: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="bg-card border-2 border-foreground/10 rounded-2xl p-6 shadow-playful"
+                  >
+                    <div className="text-lg font-display font-semibold mb-2">
+                      {p.name}
+                    </div>
+
+                    <p className="text-sm md:text-base text-muted-foreground leading-relaxed mb-4">
+                      {p.why_it_fits}
+                    </p>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-xl border border-foreground/10 p-4">
+                        <div className="font-medium mb-2">Risks</div>
+                        <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+                          {p.risks?.map((r: string, i: number) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="rounded-xl border border-foreground/10 p-4">
+                        <div className="font-medium mb-2">
+                          Micro-experiments (≤ 7 days)
+                        </div>
+                        <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+                          {p.micro_experiments?.map((m: string, i: number) => (
+                            <li key={i}>{m}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
-          <Button variant="hero" size="lg" className="min-w-[180px]">
+          <Button
+            variant="hero"
+            size="lg"
+            className="min-w-[180px]"
+            onClick={handleReflect}
+            disabled={loading}
+          >
             <SparklesDoodle className="w-5 h-5 mr-1" />
-            Reflect
+            {loading ? "Reflecting..." : "Reflect"}
           </Button>
         </div>
 

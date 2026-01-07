@@ -21,7 +21,7 @@ const Footer = () => {
         <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
           Made with 
           <HeartDoodle className="w-4 h-4 text-secondary mx-1" />
-          for the uncertain
+          for the uncertain, by Antonella Masini
         </div>
 
         {/* Year */}
