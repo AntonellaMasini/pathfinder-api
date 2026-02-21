@@ -9,6 +9,16 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     proxy: {
+      // New auth + session routes
+      "/auth": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/sessions": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      // Legacy routes
       "/reflect_guarded": {
         target: "http://localhost:8000",
         changeOrigin: true,
@@ -26,6 +36,10 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
       },
       "/tts": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/transcribe": {
         target: "http://localhost:8000",
         changeOrigin: true,
       },

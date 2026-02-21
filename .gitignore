@@ -1,3 +1,32 @@
-.venv
+# Python
+.venv/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Env (contains secrets — never commit)
 .env
+
+# Alembic auto-generated (keep versions/ but ignore __pycache__)
+alembic/__pycache__/
+
+# Evals
+evals/results/*.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+
+# macOS
+.DS_Store
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
