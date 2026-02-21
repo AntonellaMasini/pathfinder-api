@@ -55,16 +55,29 @@ app.include_router(sessions_router.router)
 
 # ---------------------------------------------------------------------------
 # Legacy OpenAI / ElevenLabs clients (used by existing endpoints below)
+# Created lazily since BYOK mode may not have server-side keys
 # ---------------------------------------------------------------------------
-_legacy_client = OpenAI(api_key=settings.openai_api_key or None)
+_legacy_client: Optional[OpenAI] = None
 MODEL = settings.openai_model
 PRETTY_JSON = settings.pretty_json
 MAX_RETRIES = settings.max_retries
 RETRY_MIN_SCORE = settings.retry_min_score
 
-_elevenlabs = ElevenLabs(api_key=settings.elevenlabs_api_key or None)
 ELEVEN_VOICE_ID = settings.elevenlabs_voice_id
 ELEVEN_MODEL_ID = settings.elevenlabs_model_id
+
+
+def _get_legacy_openai_client() -> OpenAI:
+    """Get or create the legacy OpenAI client (for non-BYOK endpoints)."""
+    global _legacy_client
+    if _legacy_client is None:
+        if not settings.openai_api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="No API key configured. Please add your OpenAI API key in settings."
+            )
+        _legacy_client = OpenAI(api_key=settings.openai_api_key)
+    return _legacy_client
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +129,7 @@ def health():
 def reflect(req: ReflectRequest, request: Request):
     user_text = req.text.strip()
 
-    extract = _legacy_client.responses.create(
+    extract = _get_legacy_openai_client().responses.create(
         model=MODEL,
         input=[
             {"role": "system", "content": EXTRACT_PROMPT},
@@ -125,7 +138,7 @@ def reflect(req: ReflectRequest, request: Request):
     )
     insights_dict = _safe_json(extract.output_text)
 
-    synth = _legacy_client.responses.create(
+    synth = _get_legacy_openai_client().responses.create(
         model=MODEL,
         input=[
             {"role": "system", "content": SYNTHESIZE_PROMPT},
@@ -149,7 +162,7 @@ def reflect(req: ReflectRequest, request: Request):
 @app.post("/evaluate", response_model=EvalResult, tags=["legacy"])
 @limiter.limit("20/minute")
 def evaluate(payload: dict, request: Request):
-    eval_resp = _legacy_client.responses.create(
+    eval_resp = _get_legacy_openai_client().responses.create(
         model=MODEL,
         input=[
             {"role": "system", "content": EVAL_PROMPT},
@@ -167,7 +180,7 @@ def evaluate(payload: dict, request: Request):
 def reflect_guarded(req: ReflectRequest, request: Request):
     user_text = req.text.strip()
 
-    extract = _legacy_client.responses.create(
+    extract = _get_legacy_openai_client().responses.create(
         model=MODEL,
         input=[
             {"role": "system", "content": EXTRACT_PROMPT},
@@ -180,7 +193,7 @@ def reflect_guarded(req: ReflectRequest, request: Request):
         payload = {"user_text": user_text, "insights": insights_dict}
         if extra:
             payload.update(extra)
-        resp = _legacy_client.responses.create(
+        resp = _get_legacy_openai_client().responses.create(
             model=MODEL,
             input=[
                 {"role": "system", "content": system_prompt},
@@ -197,7 +210,7 @@ def reflect_guarded(req: ReflectRequest, request: Request):
             "clarifying_question": reflect_obj.get("clarifying_question", ""),
             "path_hypotheses": reflect_obj.get("path_hypotheses", []),
         }
-        resp = _legacy_client.responses.create(
+        resp = _get_legacy_openai_client().responses.create(
             model=MODEL,
             input=[
                 {"role": "system", "content": EVAL_PROMPT},
