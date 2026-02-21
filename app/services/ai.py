@@ -1,6 +1,8 @@
 """
 AI pipeline: extract insights → synthesize path hypotheses → evaluate → repair.
 Extracted from main.py so it can be called from SSE streaming routes.
+
+Supports BYOK (Bring Your Own Key): pass openai_api_key to use a user-provided key.
 """
 from __future__ import annotations
 
@@ -14,20 +16,34 @@ from ..prompts import EXTRACT_PROMPT, SYNTHESIZE_PROMPT, EVAL_PROMPT, REPAIR_PRO
 
 settings = get_settings()
 
-# Module-level client; re-created if settings change (unlikely in prod)
-_client: Optional[OpenAI] = None
+# Module-level client for server default key (if configured)
+_default_client: Optional[OpenAI] = None
 
 
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(api_key=settings.openai_api_key or None)
-    return _client
+def _get_client(api_key: Optional[str] = None) -> OpenAI:
+    """
+    Get an OpenAI client.
+    
+    If api_key is provided, creates a new client with that key (BYOK).
+    Otherwise uses the server's default key from settings.
+    """
+    if api_key:
+        # User-provided key (BYOK) - create fresh client
+        return OpenAI(api_key=api_key)
+    
+    # Use server default
+    global _default_client
+    if _default_client is None:
+        server_key = settings.openai_api_key or None
+        if not server_key:
+            raise ValueError("No API key provided and no server default configured")
+        _default_client = OpenAI(api_key=server_key)
+    return _default_client
 
 
-def _chat(system: str, user: str) -> str:
+def _chat(system: str, user: str, api_key: Optional[str] = None) -> str:
     """Single-turn chat completion. Returns output text."""
-    client = _get_client()
+    client = _get_client(api_key)
     resp = client.responses.create(
         model=settings.openai_model,
         input=[
@@ -64,6 +80,7 @@ def _enforce_pass_gate(eval_dict: dict) -> dict:
 def run_pipeline(
     user_text: str,
     on_status: Optional[Callable[[str], None]] = None,
+    openai_api_key: Optional[str] = None,
 ) -> dict:
     """
     Run the full Pathfinder AI pipeline.
@@ -72,6 +89,7 @@ def run_pipeline(
         user_text: The user's free-form career reflection.
         on_status: Optional sync callback called with phase strings:
                    "extracting", "synthesizing", "evaluating", "done".
+        openai_api_key: Optional user-provided OpenAI API key (BYOK).
 
     Returns:
         dict with keys: reflection, clarifying_question, insights,
@@ -84,12 +102,12 @@ def run_pipeline(
 
     # 1. Extract structured insights
     status("extracting")
-    insights_dict = _safe_json(_chat(EXTRACT_PROMPT, user_text))
+    insights_dict = _safe_json(_chat(EXTRACT_PROMPT, user_text, openai_api_key))
 
     # 2. Synthesize reflection + hypotheses
     status("synthesizing")
     synth_payload = json.dumps({"user_text": user_text, "insights": insights_dict})
-    synth_obj = _safe_json(_chat(SYNTHESIZE_PROMPT, synth_payload))
+    synth_obj = _safe_json(_chat(SYNTHESIZE_PROMPT, synth_payload, openai_api_key))
 
     # 3. Evaluate
     status("evaluating")
@@ -100,7 +118,7 @@ def run_pipeline(
         "clarifying_question": synth_obj.get("clarifying_question", ""),
         "path_hypotheses": synth_obj.get("path_hypotheses", []),
     })
-    eval_dict = _enforce_pass_gate(_safe_json(_chat(EVAL_PROMPT, eval_payload)))
+    eval_dict = _enforce_pass_gate(_safe_json(_chat(EVAL_PROMPT, eval_payload, openai_api_key)))
 
     retries_used = 0
 
@@ -116,7 +134,7 @@ def run_pipeline(
             "issues": eval_dict.get("issues", []),
             "issue_evidence": eval_dict.get("issue_evidence", []),
         })
-        synth_obj = _safe_json(_chat(REPAIR_PROMPT, repair_user))
+        synth_obj = _safe_json(_chat(REPAIR_PROMPT, repair_user, openai_api_key))
 
         eval_payload = json.dumps({
             "user_text": user_text,
@@ -125,7 +143,7 @@ def run_pipeline(
             "clarifying_question": synth_obj.get("clarifying_question", ""),
             "path_hypotheses": synth_obj.get("path_hypotheses", []),
         })
-        eval_dict = _enforce_pass_gate(_safe_json(_chat(EVAL_PROMPT, eval_payload)))
+        eval_dict = _enforce_pass_gate(_safe_json(_chat(EVAL_PROMPT, eval_payload, openai_api_key)))
         retries_used += 1
 
     status("done")

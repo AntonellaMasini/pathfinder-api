@@ -24,7 +24,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Header
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -140,6 +140,7 @@ async def stream_session(
     request: Request,
     user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
 ):
     """
     SSE endpoint that streams generation progress and the final result.
@@ -150,6 +151,8 @@ async def stream_session(
       done    {}
       error   {"message": "..."}
 
+    Supports BYOK: pass X-OpenAI-Key header to use your own API key.
+    
     Reconnect: send Last-Event-ID header. If the session is already `done`,
     the cached result is replayed immediately.
     """
@@ -206,7 +209,7 @@ async def stream_session(
     user_text = session.user_text
 
     return StreamingResponse(
-        _generate_and_stream(session_id_val, user_text),
+        _generate_and_stream(session_id_val, user_text, x_openai_key),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -219,12 +222,16 @@ async def stream_session(
 async def _generate_and_stream(
     session_id: uuid.UUID,
     user_text: str,
+    openai_api_key: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """
     Async generator that:
     1. Runs the AI pipeline in a thread pool (non-blocking).
     2. Forwards status callbacks as SSE events while the pipeline runs.
     3. Saves the result to the DB and emits the final `result` event.
+    
+    Args:
+        openai_api_key: Optional user-provided API key (BYOK).
     """
     status_q: thread_queue.Queue = thread_queue.Queue()
 
@@ -233,7 +240,7 @@ async def _generate_and_stream(
 
     def pipeline_thread() -> None:
         try:
-            result = run_pipeline(user_text, on_status=on_status)
+            result = run_pipeline(user_text, on_status=on_status, openai_api_key=openai_api_key)
             status_q.put(("result", result))
         except Exception as exc:
             status_q.put(("error", str(exc)))

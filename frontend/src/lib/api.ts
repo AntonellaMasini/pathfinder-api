@@ -27,6 +27,52 @@ function authHeaders(): Record<string, string> {
 }
 
 // ---------------------------------------------------------------------------
+// BYOK (Bring Your Own Key) helpers
+// ---------------------------------------------------------------------------
+
+const OPENAI_KEY_STORAGE = "pf_openai_key";
+const ELEVENLABS_KEY_STORAGE = "pf_elevenlabs_key";
+const ELEVENLABS_VOICE_STORAGE = "pf_elevenlabs_voice";
+
+export function getOpenAIKey(): string | null {
+  return localStorage.getItem(OPENAI_KEY_STORAGE);
+}
+
+export function setOpenAIKey(key: string): void {
+  localStorage.setItem(OPENAI_KEY_STORAGE, key);
+}
+
+export function clearOpenAIKey(): void {
+  localStorage.removeItem(OPENAI_KEY_STORAGE);
+}
+
+export function getElevenLabsKey(): string | null {
+  return localStorage.getItem(ELEVENLABS_KEY_STORAGE);
+}
+
+export function getElevenLabsVoice(): string | null {
+  return localStorage.getItem(ELEVENLABS_VOICE_STORAGE);
+}
+
+export function hasElevenLabsConfig(): boolean {
+  return !!(getElevenLabsKey() && getElevenLabsVoice());
+}
+
+function openAIKeyHeader(): Record<string, string> {
+  const key = getOpenAIKey();
+  return key ? { "X-OpenAI-Key": key } : {};
+}
+
+function elevenLabsHeaders(): Record<string, string> {
+  const key = getElevenLabsKey();
+  const voice = getElevenLabsVoice();
+  const headers: Record<string, string> = {};
+  if (key) headers["X-ElevenLabs-Key"] = key;
+  if (voice) headers["X-ElevenLabs-Voice"] = voice;
+  return headers;
+}
+
+// ---------------------------------------------------------------------------
 // Core fetch wrapper
 // ---------------------------------------------------------------------------
 
@@ -193,15 +239,18 @@ export const transcription = {
   /**
    * Transcribe audio using OpenAI Whisper.
    * Accepts a Blob (e.g. from MediaRecorder).
+   * Supports BYOK: uses user's OpenAI key from localStorage if available.
    */
   async transcribe(audioBlob: Blob): Promise<{ text: string }> {
     const formData = new FormData();
     formData.append("audio", audioBlob, "recording.webm");
 
-    const token = getToken();
     const resp = await fetch(`${BASE}/transcribe`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: {
+        ...authHeaders(),
+        ...openAIKeyHeader(),
+      },
       body: formData,
     });
 
@@ -247,11 +296,14 @@ export const sessions = {
   /**
    * Fetch-based SSE stream. Returns an async generator of typed events.
    * Uses Bearer auth (EventSource doesn't support custom headers).
+   * Supports BYOK: uses user's OpenAI key from localStorage if available.
    */
   async *stream(sessionId: string): AsyncGenerator<SSEEvent> {
-    const token = getToken();
     const resp = await fetch(`${BASE}/sessions/${sessionId}/stream`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: {
+        ...authHeaders(),
+        ...openAIKeyHeader(),
+      },
     });
 
     if (!resp.ok) {
@@ -290,5 +342,40 @@ export const sessions = {
         }
       }
     }
+  },
+};
+
+// ---------------------------------------------------------------------------
+// TTS API (optional - requires ElevenLabs config)
+// ---------------------------------------------------------------------------
+
+export const tts = {
+  /**
+   * Convert text to speech using ElevenLabs.
+   * Returns audio blob, or throws if TTS is not configured.
+   */
+  async speak(text: string): Promise<Blob> {
+    const resp = await fetch(`${BASE}/tts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...elevenLabsHeaders(),
+      },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const body = await resp.json();
+        detail = body?.detail ?? detail;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(resp.status, detail);
+    }
+
+    return resp.blob();
   },
 };

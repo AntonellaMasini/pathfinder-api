@@ -4,9 +4,10 @@ import json
 import os
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import tempfile
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -246,20 +247,40 @@ def reflect_guarded(req: ReflectRequest, request: Request):
 
 @app.post("/tts", tags=["legacy"])
 @limiter.limit("20/minute")
-def tts(payload: dict, request: Request):
+def tts(
+    payload: dict,
+    request: Request,
+    x_elevenlabs_key: Optional[str] = Header(None, alias="X-ElevenLabs-Key"),
+    x_elevenlabs_voice: Optional[str] = Header(None, alias="X-ElevenLabs-Voice"),
+):
+    """
+    Text-to-speech using ElevenLabs.
+    
+    Supports BYOK: pass X-ElevenLabs-Key and X-ElevenLabs-Voice headers.
+    If no key is provided, returns 400 (TTS is optional).
+    """
     text = (payload.get("text") or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Missing 'text'")
 
-    if not settings.elevenlabs_api_key or not ELEVEN_VOICE_ID:
-        raise HTTPException(status_code=500, detail="ElevenLabs env vars not set")
+    # Determine which credentials to use
+    api_key = x_elevenlabs_key or settings.elevenlabs_api_key
+    voice_id = x_elevenlabs_voice or ELEVEN_VOICE_ID
+
+    if not api_key or not voice_id:
+        raise HTTPException(
+            status_code=400,
+            detail="TTS not configured. Add your ElevenLabs API key in settings to enable voice playback."
+        )
 
     text = text[:1200] + ("..." if len(text) > 1200 else "")
 
     try:
-        audio_stream = _elevenlabs.text_to_speech.convert(
+        # Create client with user's key if provided
+        client = ElevenLabs(api_key=api_key)
+        audio_stream = client.text_to_speech.convert(
             text=text,
-            voice_id=ELEVEN_VOICE_ID,
+            voice_id=voice_id,
             model_id=ELEVEN_MODEL_ID,
             output_format="mp3_44100_128",
         )
@@ -278,13 +299,24 @@ def tts(payload: dict, request: Request):
 
 @app.post("/transcribe", tags=["legacy"])
 @limiter.limit("20/minute")
-async def transcribe(request: Request, audio: UploadFile = File(...)):
+async def transcribe(
+    request: Request,
+    audio: UploadFile = File(...),
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
+):
     """
     Transcribe audio to text using OpenAI Whisper.
     Accepts audio files (webm, mp3, wav, m4a, etc.).
+    
+    Supports BYOK: pass X-OpenAI-Key header to use your own API key.
     """
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    # Determine which API key to use (user-provided or server default)
+    api_key = x_openai_key or settings.openai_api_key
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="No API key provided. Please add your OpenAI API key in settings."
+        )
 
     # Read the uploaded audio file
     audio_bytes = await audio.read()
@@ -313,8 +345,10 @@ async def transcribe(request: Request, audio: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
+        # Create client with appropriate key
+        client = OpenAI(api_key=api_key)
         with open(tmp_path, "rb") as f:
-            transcription = _legacy_client.audio.transcriptions.create(
+            transcription = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
             )
@@ -324,3 +358,25 @@ async def transcribe(request: Request, audio: UploadFile = File(...)):
     finally:
         # Clean up temp file
         Path(tmp_path).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Static files (serve frontend in production)
+# ---------------------------------------------------------------------------
+
+# Path to built frontend (created by Docker build)
+_static_dir = Path(__file__).parent.parent / "static"
+
+if _static_dir.exists():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=_static_dir / "assets"), name="assets")
+
+    # Catch-all route: serve index.html for client-side routing
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Try to serve the exact file first
+        file_path = _static_dir / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        # Otherwise serve index.html (for React Router)
+        return FileResponse(_static_dir / "index.html")

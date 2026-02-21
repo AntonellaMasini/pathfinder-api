@@ -3,8 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { StarDoodle, SparklesDoodle, PathDoodle, QuestionDoodle } from "@/components/Doodles";
 import { ResultsDisplay } from "@/components/ResultsDisplay";
-import { sessions as sessionsApi, transcription, Result, ApiError } from "@/lib/api";
+import { ApiKeyButton, ApiKeyModal } from "@/components/ApiKeyModal";
+import { sessions as sessionsApi, transcription, tts, Result, ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useApiKey } from "@/contexts/ApiKeyContext";
 
 type RecordingState = "idle" | "recording" | "ready";
 type Phase = "transcribing" | "extracting" | "synthesizing" | "evaluating" | "repairing" | "done";
@@ -20,7 +22,9 @@ const PHASE_LABELS: Record<Phase, string> = {
 
 const Talk = () => {
   const { user } = useAuth();
+  const { hasApiKey } = useApiKey();
   const navigate = useNavigate();
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   // Recording state
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
@@ -175,13 +179,7 @@ const Talk = () => {
         URL.revokeObjectURL(audioUrlRef.current);
         audioUrlRef.current = null;
       }
-      const res = await fetch("/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: textToSpeak }),
-      });
-      if (!res.ok) throw new Error("TTS failed");
-      const blob = await res.blob();
+      const blob = await tts.speak(textToSpeak);
       const url = URL.createObjectURL(blob);
       audioUrlRef.current = url;
       const audio = new Audio(url);
@@ -226,16 +224,17 @@ const Talk = () => {
               <SparklesDoodle className="w-5 h-5 text-accent" />
               <span className="text-sm font-medium text-muted-foreground">Talk Mode</span>
             </div>
-            {user && (
-              <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
+              <ApiKeyButton />
+              {user && (
                 <Link
                   to="/history"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   My reflections →
                 </Link>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold mb-4">
@@ -395,7 +394,13 @@ const Talk = () => {
               variant="hero"
               size="lg"
               className="min-w-[180px]"
-              onClick={handleReflect}
+              onClick={() => {
+                if (!hasApiKey) {
+                  setShowApiKeyModal(true);
+                } else {
+                  handleReflect();
+                }
+              }}
               disabled={loading || !audioBlob}
             >
               <SparklesDoodle className="w-5 h-5 mr-1" />
@@ -403,6 +408,26 @@ const Talk = () => {
             </Button>
           </div>
         )}
+
+        {/* API Key prompt */}
+        {!hasApiKey && !result && !loading && (
+          <div className="max-w-md mx-auto mb-6">
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-center">
+              <p className="text-sm text-amber-700 dark:text-amber-300 font-body">
+                <strong>Add your OpenAI API key</strong> to use Pathfinder.{" "}
+                <button
+                  onClick={() => setShowApiKeyModal(true)}
+                  className="text-primary hover:underline font-medium"
+                >
+                  Add key →
+                </button>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* API Key Modal */}
+        <ApiKeyModal open={showApiKeyModal} onOpenChange={setShowApiKeyModal} />
 
         {/* Instructions */}
         {!result && !loading && (
